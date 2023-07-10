@@ -11,25 +11,9 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 io.on("connection", (socket) => {
   console.log("connection");
-  socket.on("createRoom", (message) => {
-    console.log(`createRoom \n socket id: ${socket.id}`, message);
-  });
-
-  socket.on("join-team", (teamId: string) => {
-    const hasRoom = socket.rooms.size > 1;
-
-    if (hasRoom) {
-      socket.emit("exception", { errorMessage: "Already in room!" });
-      return;
-    }
-
-    socket.join(teamId);
-    socket.emit("joined-team", teamId);
-  });
 
   socket.on("create-team", () => {
     const hasRoom = socket.rooms.size > 1;
-    console.log("hasRoom", hasRoom);
     if (hasRoom) {
       socket.emit("exception", { errorMessage: "Already in room!" });
       return;
@@ -40,14 +24,43 @@ io.on("connection", (socket) => {
     socket.emit("joined-team", teamId);
   });
 
+  socket.on("join-team", (teamId: string, createIfNotFound?: boolean) => {
+    const room = io.sockets.adapter.rooms.get(teamId);
+    if (!room && !createIfNotFound) {
+      socket.emit("exception", { errorMessage: "Room does not exist!" });
+      return;
+    }
+
+    const teamSize = io.sockets.adapter.rooms.get(teamId)?.size;
+    if (teamSize && teamSize >= 10) {
+      socket.emit("exception", { errorMessage: "Room full!" });
+      return;
+    }
+
+    socket.join(teamId);
+    socket.emit("joined-team", teamId);
+  });
+
   socket.on("guess-word", (word, room) => {
     if (!word) return;
     socket.to(room).emit("receive-guess-word", word);
   });
 
-  socket.on("leaveTeam", (teamId: string) => {
+  socket.on("leave-team", (teamId: string) => {
+    console.log("leave-team", teamId);
     socket.leave(teamId);
-    socket.emit("left-room");
+    socket.emit("left-team");
+  });
+
+  socket.on("guess-word", (word, teamId) => {
+    if (!word || !teamId) return;
+    console.log(teamId);
+    // Do async call to endpoint and check the word
+    socket.emit("receive-guess-word", word);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("disconnected");
   });
 });
 
